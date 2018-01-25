@@ -1,0 +1,7 @@
+[package]
+name = "crypto_pipe"
+version = "0.1.0"
+authors = ["KizzyCode Software Labs./Keziah Biermann"]
+build = "build.rs"
+
+[dependencies]
