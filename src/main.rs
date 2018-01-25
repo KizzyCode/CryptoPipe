@@ -14,6 +14,7 @@ use error::{ Error, ErrorType };
 
 
 fn die(message: &str, code: i32) -> ! {
+	eprintln!("*** CryptoPipe {} ***\n", include_str!("version.txt"));
 	eprint!("{}\n", message.trim());
 	std::process::exit(code)
 }

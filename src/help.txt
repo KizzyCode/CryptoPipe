@@ -37,6 +37,6 @@ Usage: `%PROGRAM_NAME% <verb> [switches]...` where <verb> is one of the followin
             The amount of threads required to derive the key from the password (WARNING: different values will produce
             different keys)
 
-    `license`: Display the license-information
+    `licenses`: Display the license-information
 
     `help`: Display this help
