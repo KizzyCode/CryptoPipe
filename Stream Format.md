@@ -14,11 +14,19 @@ struct Chunk {
 The stream has the following format:
 ```c
 struct {
-	uint8_t kdf_salt[32]; // Random KDF-salt
+	// Version-triple; e.g. {0, 2, 0} for v0.2.0
+	uint8_t version[3];
 	
-	uint32_t kdf_iterations; // => Serialized as Big-Endian number
-	uint32_t kdf_memory_requirements; // => Serialized as Big-Endian number
-	uint32_t kdf_parallelism; // => Serialized as Big-Endian number
+	// Algorithms (see appendix A)
+	uint8_t pbkdf_algo_id;
+	uint8_t kdf_algo_id; 
+	uint8_t aead_algo_id;
+
+	// PBKDF-parameters
+	uint8_t pbkdf_salt[32]; // Random KDF-salt	
+	uint32_t pbkdf_iterations; // => Serialized as Big-Endian number
+	uint32_t pbkdf_memory_requirements; // => Serialized as Big-Endian number
+	uint32_t pbkdf_parallelism; // => Serialized as Big-Endian number
 	
 	Chunk* chunks;
 } stream; // => Raw-serialized (without memory-alignment-padding)
@@ -52,3 +60,21 @@ as cipher-key (first 32-bytes) and MAC-key (second 32-bytes).
  5. Our chunk-model is vulnerable to stream-truncation. This is mitigated by using a higher KDF-position for the last
     chunk. The KDF-position is incremented by 2^63 so that we still preserve the relative position to protect against
     reordering etc. (see 4.) but also have a unique last-chunk-indicator.
+
+
+# Appendix A
+This is a list of the supported crypto-algorithms and their identifiers
+
+## PBKDFs
+ - [`Argon2i v1.3`](https://www.cryptolux.org/images/0/0d/Argon2.pdf); algorithm-ID: `1`
+
+## KDFs
+ - `ChaCha20 with 0-nonce`; algorithm-ID: `1`
+   
+   The cipher-stream is used as key-byte-stream
+
+## AEADs
+ - `ChaCha20 with 0-nonce + Poly1305`; algorithm-ID: `1`
+   
+   This algorithm uses a 64-byte key; the first 32-bytes are used as ChaCha20-key, the second 32-bytes are used as
+   Poly1305-key

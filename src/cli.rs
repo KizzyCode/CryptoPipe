@@ -1,25 +1,25 @@
+use std::fmt::{ Debug, Formatter, Error as FmtError };
 use std::env::args;
 use std::any::Any;
 use super::error::{ Error, ErrorType };
 
-pub trait Switch {
+pub trait Switch: Debug {
 	fn parse(&mut self, arguments: &mut Vec<String>) -> Result<(), Error>;
 	fn name(&self) -> &str;
 	fn value(&self) -> &Any;
 }
 
-
-pub struct TypedSwitch<'a, T: 'static + Clone> {
+pub struct TypedSwitch<'a, T: 'static + Clone + Debug> {
 	switch: String,
 	value: Option<T>,
 	parser: &'a Fn(&str) -> Result<T, Error>
 }
-impl<'a, T: Clone> TypedSwitch<'a, T> {
+impl<'a, T: Clone + Debug> TypedSwitch<'a, T> {
 	pub fn new<S: ToString>(name: S, default: Option<T>, parser: &'a Fn(&str) -> Result<T, Error>) -> Self {
 		TypedSwitch{ switch: name.to_string(), value: default, parser }
 	}
 }
-impl<'a, T: Clone> Switch for TypedSwitch<'a, T> {
+impl<'a, T: Clone + Debug> Switch for TypedSwitch<'a, T> {
 	fn parse(&mut self, arguments: &mut Vec<String>) -> Result<(), Error> {
 		// Iterate over arguments
 		for i in 0..arguments.len() {
@@ -30,8 +30,9 @@ impl<'a, T: Clone> Switch for TypedSwitch<'a, T> {
 					self.value = Some((self.parser)(raw)?);
 				}
 				
-				// Remove the switch from the list
+				// Remove parsed argument and break
 				arguments.remove(i);
+				break
 			}
 		}
 		
@@ -46,8 +47,13 @@ impl<'a, T: Clone> Switch for TypedSwitch<'a, T> {
 		self.value.as_ref().unwrap()
 	}
 }
+impl<'a, T: Clone + Debug> Debug for TypedSwitch<'a, T> {
+	fn fmt(&self, formatter: &mut Formatter) -> Result<(), FmtError> {
+		write!(formatter, "TypedSwitch {{ switch: {:?}, value: {:?} }}", &self.switch, &self.value)
+	}
+}
 
-
+#[derive(Debug)]
 pub struct Verb {
 	verb: String,
 	switches: Vec<Box<Switch>>
@@ -76,7 +82,6 @@ impl Verb {
 		throw_err!(ErrorType::CliError)
 	}
 }
-
 
 pub fn parse(verbs: Vec<Verb>) -> Result<Verb, Error> {
 	// Gather all arguments and convert them to strings

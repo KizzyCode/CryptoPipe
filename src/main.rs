@@ -1,33 +1,32 @@
 #[macro_use] mod error;
 mod cli;
-mod io;
 mod libsodium;
-mod kdf;
-mod crypto_stream;
+mod crypto;
+mod constants;
+mod io_runloop;
+mod io_processor;
+
 #[cfg(test)] mod tests;
 
 use std::env::var;
-use kdf::PbkdfInfo;
-use crypto_stream::{ Encryptor, Decryptor };
 use error::{ Error, ErrorType };
 
 
 
 fn die(message: &str, code: i32) -> ! {
-	eprintln!("*** CryptoPipe {} ***\n", include_str!("version.txt"));
+	eprintln!("*** CryptoPipe {} ***\n", env!("CARGO_PKG_VERSION"));
 	eprint!("{}\n", message.trim());
 	std::process::exit(code)
 }
 
-
 fn licenses() -> ! {
-	die(include_str!("licenses.txt"), 0)
+	die(include_str!("texts/licenses.txt"), 0)
 }
 
 fn help(msg: &str) -> ! {
 	// Build message
 	let mut message = msg.to_owned() + "\n\n";
-	message += include_str!("help.txt");
+	message += include_str!("texts/help.txt");
 	
 	// Replace `%PROGRAM_NAME%`
 	let program_name = std::env::args().next().unwrap_or("<program_name>".to_owned());
@@ -37,22 +36,13 @@ fn help(msg: &str) -> ! {
 }
 
 
-fn unwrap_or_die<T>(result: Result<T, Error>) -> T {
-	match result {
-		Ok(result) => result,
-		Err(error) => if error.error_type == ErrorType::CliError { help(&error.as_string()) }
-			else { die(&error.as_string(), 2) }
-	}
+
+fn get_environment_password() -> Result<String, Error> {
+	if let Ok(password) = var("CRYPTO_PIPE_PASSWORD") { return Ok(password) }
+	throw_err!(ErrorType::CliError, "You either need to set the \"--password=\"-switch or the \"CRYPTO_PIPE_PASSWORD\"-environment-variable".to_owned())
 }
 
-fn expect_environment_password() -> Result<String, Error> {
-	if let Ok(password) = var("CRYPTO_STREAM_PASSWORD") { return Ok(password) }
-	throw_err!(ErrorType::CliError, "You either need to set the \"--password=\"-switch or the \"CRYPTO_STREAM_PASSWORD\"-environment-variable".to_owned())
-}
-
-
-
-fn main() {
+fn parse_cli() -> Result<cli::Verb, Error> {
 	// CLI-parse-helpers
 	fn parse_string(raw: &str) -> Result<String, Error> {
 		Ok(raw.to_string())
@@ -79,37 +69,47 @@ fn main() {
 			Box::new(cli::TypedSwitch::new("--pbkdf-parallelism=", Some(4u32), &parse_u32)),
 		])
 	];
-	let verb = unwrap_or_die(cli::parse(verbs));
-	
-	// Switch based on verb
-	match verb.name() {
-		"help" => help(""),
-		"licenses" => licenses(),
-		"encrypt" => {
-			// Get password
-			let mut password = unwrap_or_die(verb.get_switch::<String>("--password="));
-			if password.is_empty() { password = unwrap_or_die(expect_environment_password()) }
-			
-			// Build PBKDF-info
-			let pbkdf_info = PbkdfInfo::new(
-				unwrap_or_die(verb.get_switch::<u32>("--pbkdf-iterations=")),
-				unwrap_or_die(verb.get_switch::<u32>("--pbkdf-memory-requirements=")),
-				unwrap_or_die(verb.get_switch::<u32>("--pbkdf-parallelism="))
-			);
-			
-			// Create STDIO-handle an run encryptor
-			let mut stdio = io::StdIO::new(crypto_stream::CHUNK_DATA_SIZE);
-			unwrap_or_die(Encryptor::new(&mut stdio).runloop(password, pbkdf_info));
-		},
-		"decrypt" => {
-			// Get password
-			let mut password = unwrap_or_die(verb.get_switch::<String>("--password="));
-			if password.is_empty() { password = unwrap_or_die(expect_environment_password()) }
-			
-			// Create STDIO-handle an run decryptor
-			let mut stdio = io::StdIO::new(crypto_stream::CHUNK_DATA_SIZE + crypto_stream::MAC_SIZE);
-			unwrap_or_die(Decryptor::new(&mut stdio).runloop(password));
-		},
-		_ => panic!("Should never happen")
+	cli::parse(verbs)
+}
+
+fn main() {
+	// "Catch" all errors to print them readable
+	fn safe() -> Result<(), Error> {
+		// Read and process verb
+		let verb = parse_cli()?;
+		
+		match verb.name() {
+			"help" => help(""),
+			"licenses" => licenses(),
+			"encrypt" => {
+				// Get password
+				let mut password = verb.get_switch::<String>("--password=")?;
+				if password.is_empty() { password = get_environment_password()? }
+				
+				// Parse PBKDF-parameters
+				let pbkdf_iterations = verb.get_switch::<u32>("--pbkdf-iterations=")?;
+				let pbkdf_memory_requirements = verb.get_switch::<u32>("--pbkdf-memory-requirements=")?;
+				let pbkdf_parallelism = verb.get_switch::<u32>("--pbkdf-parallelism=")?;
+				
+				// Start runloop
+				let io_processor = Box::new(io_processor::IoEncryptor::new(password, pbkdf_iterations, pbkdf_memory_requirements, pbkdf_parallelism)?);
+				io_runloop::IoRunloop::new(io_processor, Box::new(io_runloop::Stdio::new())).start()
+			},
+			"decrypt" => {
+				// Get password
+				let mut password = verb.get_switch::<String>("--password=")?;
+				if password.is_empty() { password = get_environment_password()? }
+				
+				// Start runloop
+				let io_processor = Box::new(io_processor::IoDecryptor::new(password));
+				io_runloop::IoRunloop::new(io_processor, Box::new(io_runloop::Stdio::new())).start()
+			},
+			_ => panic!("Should never happen")
+		}
+	}
+	match safe() {
+		Ok(result) => result,
+		Err(error) => if error.error_type == ErrorType::CliError { help(&error.as_string()) }
+			else { die(&error.as_string(), 2) }
 	}
 }
