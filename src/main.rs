@@ -56,7 +56,7 @@ fn parse_cli() -> Result<cli::Verb, Error> {
 	let verbs = vec![
 		cli::Verb::new("help", vec![]),
 		cli::Verb::new("licenses", vec![]),
-		cli::Verb::new("encrypt", vec![
+		cli::Verb::new("seal", vec![
 			Box::new(cli::TypedSwitch::new("--password=", Some(String::new()), &parse_string)),
 			
 			Box::new(cli::TypedSwitch::new("--pbkdf-time-cost=", Some(8u32), &parse_u32)),
@@ -67,7 +67,7 @@ fn parse_cli() -> Result<cli::Verb, Error> {
 			Box::new(cli::TypedSwitch::new("--kdf-algo=", Some("HMAC-SHA512".to_string()), &parse_string)),
 			Box::new(cli::TypedSwitch::new("--auth-enc-algo=", Some("ChaChaPoly".to_string()), &parse_string)),
 		]),
-		cli::Verb::new("decrypt", vec![
+		cli::Verb::new("open", vec![
 			Box::new(cli::TypedSwitch::new("--password=", Some(String::new()), &parse_string))
 		])
 	];
