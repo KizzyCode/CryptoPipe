@@ -86,7 +86,7 @@ impl Verb {
 pub fn parse(verbs: Vec<Verb>) -> Result<Verb, Error> {
 	// Gather all arguments and convert them to strings
 	let mut arguments: Vec<String> = args().collect();
-	if arguments.len() < 2 { throw_err!(ErrorType::CliError, "No verb specified".to_owned()) }
+	if arguments.len() < 2 { throw_err!(ErrorType::CliError, "No verb specified".to_string()) }
 	
 	// Determine verb
 	for mut verb in verbs {

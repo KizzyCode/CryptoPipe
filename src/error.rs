@@ -37,6 +37,11 @@ impl From<std::num::ParseIntError> for ErrorType {
 		ErrorType::InvalidData
 	}
 }
+impl From<super::asn1_der::Error> for ErrorType {
+	fn from(_: super::asn1_der::Error) -> ErrorType {
+		ErrorType::InvalidData
+	}
+}
 impl PartialEq for ErrorType {
 	fn eq(&self, other: &Self) -> bool {
 		let self_string = format!("{:?}", self);

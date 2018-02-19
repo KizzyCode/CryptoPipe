@@ -1,7 +1,8 @@
 [package]
 name = "crypto_pipe"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["KizzyCode Software Labs./Keziah Biermann"]
 build = "build.rs"
 
 [dependencies]
+asn1_der = { git = "https://github.com/KizzyCode/asn1_der" }

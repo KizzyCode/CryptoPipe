@@ -1,45 +1,50 @@
-use super::super::io_runloop::IoRunloop;
-use super::super::io_processor::{ IoEncryptor, IoDecryptor };
-use super::super::libsodium;
+use super::super::crypto;
+use super::super::stream;
 use super::memory_io::MemoryIo;
-use super::{ estimate_sealed_size, RANDOM_STREAM_PASSWORD };
+
+const RANDOM_STREAM_PASSWORD: &str = "Random password";
+
+
 
 struct Test {
 	random_size: usize
 }
 impl Test {
-	pub fn run(&self, pbkdf_parameters: (u32, u32, u32)) {
+	pub fn argon2i_hmacsha512_chachapoly(&self, pbkdf_parameters: (u32, u32, u32)) {
 		// Create random plain-text-stream
 		let mut random_plain = vec![0u8; self.random_size];
-		libsodium::random(&mut random_plain);
+		crypto::random(&mut random_plain);
 		
 		// Encrypt data
 		let encrypted = {
-			// Create IO-handle
-			let io_handle = MemoryIo::new(random_plain.clone(), estimate_sealed_size(random_plain.len()));
-			
-			// Create encryptor with random nonce
-			let io_encryptor = Box::new(IoEncryptor::new(
-				RANDOM_STREAM_PASSWORD.to_owned(),
-				pbkdf_parameters.0, pbkdf_parameters.1, pbkdf_parameters.2
-			).unwrap());
+			// Create stream-instance
+			let stream_instance = crypto::StreamInstance::new(
+				crypto::pbkdf::Argon2i::new(pbkdf_parameters.0, pbkdf_parameters.1, pbkdf_parameters.2),
+				crypto::kdf::HmacSha2512::new(),
+				crypto::auth_enc::ChaCha20Poly1305::new()
+			);
 			
 			// Start runloop
-			IoRunloop::new(io_encryptor, Box::new(io_handle.duplicate())).start().unwrap();
-			io_handle.stdout().to_vec()
+			let mut io = MemoryIo::new(
+				random_plain.clone(),
+				super::estimate_sealed_size(random_plain.len(), stream_instance.auth_enc.overhead())
+			);
+			{
+				let mut encryptor = stream::Encryptor::new(RANDOM_STREAM_PASSWORD.to_string(), &mut io, stream_instance).unwrap();
+				encryptor.runloop().unwrap();
+			}
+			io.stdout()
 		};
 		
 		// Decrypt data
 		let decrypted = {
-			// Create IO-handle
-			let io_handle = MemoryIo::new(encrypted.clone(), encrypted.len());
-			
-			// Create decryptor
-			let io_decryptor = Box::new(IoDecryptor::new(RANDOM_STREAM_PASSWORD.to_owned()));
-			
 			// Start runloop
-			IoRunloop::new(io_decryptor, Box::new(io_handle.duplicate())).start().unwrap();
-			io_handle.stdout().to_vec()
+			let mut io = MemoryIo::new(encrypted.clone(), encrypted.len());
+			{
+				let mut decryptor = stream::Decryptor::new(RANDOM_STREAM_PASSWORD.to_string(), &mut io).unwrap();
+				decryptor.runloop().unwrap();
+			}
+			io.stdout()
 		};
 		
 		// Test result
@@ -65,7 +70,7 @@ fn batch() {
 	
 	// Run tests with two different PBKDF-parameters
 	for test in tests.iter() {
-		test.run((8, 256 * 1024, 4));
-		test.run((4, 512 * 1024, 8));
+		test.argon2i_hmacsha512_chachapoly((8, 256, 4));
+		test.argon2i_hmacsha512_chachapoly((4, 512, 8));
 	}
 }
