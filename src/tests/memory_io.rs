@@ -1,5 +1,5 @@
 use std;
-use super::super::error::{ Error, ErrorType };
+use super::super::{ Error, CpError };
 use super::super::io;
 
 /// A StdIO-replacement that works with memory-buffers instead of the StdIO-streams
@@ -18,7 +18,7 @@ impl MemoryIo {
 	}
 }
 impl io::Io for MemoryIo {
-	fn read_chunk(&mut self, chunk_buffer: &mut[u8]) -> Result<(usize, bool), Error> {
+	fn read_chunk(&mut self, chunk_buffer: &mut[u8]) -> Result<(usize, bool), Error<CpError>> {
 		// Copy the data into `chunk_buffer`
 		let to_copy = std::cmp::min(chunk_buffer.len(), self.stdin.0[self.stdin.1 ..].len());
 		chunk_buffer[.. to_copy].copy_from_slice(&self.stdin.0[self.stdin.1 .. self.stdin.1 + to_copy]);
@@ -28,14 +28,14 @@ impl io::Io for MemoryIo {
 		Ok((to_copy, self.stdin.0.len() <= self.stdin.1))
 	}
 	
-	fn write_chunk(&mut self, data: &[u8]) -> Result<(), Error> {
+	fn write_chunk(&mut self, data: &[u8]) -> Result<(), Error<CpError>> {
 		self.write_exact(data)
 	}
 	
-	fn read_exact(&mut self, buffer: &mut[u8]) -> Result<(), Error> {
+	fn read_exact(&mut self, buffer: &mut[u8]) -> Result<(), Error<CpError>> {
 		// Copy the data into `buffer`
 		let to_copy = if self.stdin.0[self.stdin.1 ..].len() >= buffer.len() { buffer.len() }
-			else { throw_err!(ErrorType::IOError(std::io::ErrorKind::UnexpectedEof.into()), "Failed to read from stdin".to_string()) };
+			else { throw_err!(std::io::ErrorKind::UnexpectedEof.into(), "Failed to read from stdin") };
 		buffer.copy_from_slice(&self.stdin.0[self.stdin.1 .. self.stdin.1 + to_copy]);
 		
 		// Update StdIn-buffer
@@ -43,9 +43,9 @@ impl io::Io for MemoryIo {
 		Ok(())
 	}
 	
-	fn write_exact(&mut self, data: &[u8]) -> Result<(), Error> {
+	fn write_exact(&mut self, data: &[u8]) -> Result<(), Error<CpError>> {
 		// Copy the data into the StdOut-buffer
-		if self.stdout.0[self.stdout.1 ..].len() < data.len() { throw_err!(ErrorType::IOError(std::io::ErrorKind::UnexpectedEof.into()), "Failed to write to stdout".to_string()) }
+		if self.stdout.0[self.stdout.1 ..].len() < data.len() { throw_err!(std::io::ErrorKind::UnexpectedEof.into(), "Failed to write to stdout") }
 		self.stdout.0[self.stdout.1 .. self.stdout.1 + data.len()].copy_from_slice(data);
 		
 		// Update StdOut-buffer

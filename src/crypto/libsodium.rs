@@ -1,6 +1,6 @@
 use std;
-use std::os::raw::{c_uchar, c_int, c_ulonglong, c_void};
-use super::super::error::{ Error, ErrorType };
+use std::os::raw::{ c_uchar, c_int, c_ulonglong, c_void };
+use super::{ Error, CpError };
 
 
 
@@ -16,9 +16,9 @@ impl Key {
 		key
 	}
 	/// Truncates the key-length
-	pub fn truncate(&mut self, new_length: usize) -> Result<(), Error> {
+	pub fn truncate(&mut self, new_length: usize) -> Result<(), Error<CpError>> {
 		// Validate input
-		if new_length > self.len() { throw_err!(ErrorType::InvalidParameter, format!("Cannot truncate a {}-byte-key by {} bytes", self.len(), new_length)) }
+		if new_length > self.len() { throw_err!(CpError::InvalidParameter, format!("Cannot truncate a {}-byte-key by {} bytes", self.len(), new_length)) }
 		
 		// Copy partial key
 		let mut truncated = vec![0u8; new_length];
@@ -77,7 +77,7 @@ extern {
 
 
 
-pub fn argon2i_v13(buffer: &mut Key, password: &str, nonce: &[u8], iterations: u32, memory_cost_kib: u32, parallelism: u32) -> Result<(), Error> {
+pub fn argon2i_v13(buffer: &mut Key, password: &str, nonce: &[u8], iterations: u32, memory_cost_kib: u32, parallelism: u32) -> Result<(), Error<CpError>> {
 	if unsafe{ sodium_init() } == -1 { panic!("Failed to init libsodium") }
 	
 	// Derive key
@@ -91,22 +91,22 @@ pub fn argon2i_v13(buffer: &mut Key, password: &str, nonce: &[u8], iterations: u
 	// Check for error
 	match result {
 		0 => Ok(()),
-		-22 | -23 | -24 => throw_err!(ErrorType::ResourceError, format!("argon2i_hash_raw returned {}", result)),
-		-35 => throw_err!(ErrorType::InvalidParameter, format!("argon2i_hash_raw returned {}", result)),
+		-22 | -23 | -24 => throw_err!(CpError::ResourceError, format!("argon2i_hash_raw returned {}", result)),
+		-35 => throw_err!(CpError::InvalidParameter, format!("argon2i_hash_raw returned {}", result)),
 		-1 | -2 | -3 | -4 | -5 | -6 | -7 | -8 | -9 | -10 | -11 | -12 | -13 | -14 | -15 | -16 | -17 | -18 | -19 | -20 | -21 | -25 | -26 | -27 | -28 | -29 | -30 =>
-			throw_err!(ErrorType::Unsupported, format!("argon2i_hash_raw returned {}", result)),
-		_ => throw_err!(ErrorType::Other(format!("argon2i_hash_raw returned {}", result)))
+			throw_err!(CpError::Unsupported, format!("argon2i_hash_raw returned {}", result)),
+		_ => throw_err!(CpError::Other(format!("argon2i_hash_raw returned {}", result)))
 	}
 }
 
 
 
-pub fn chacha20_xor(to_xor: &mut[u8], state_byte_offset: u64, key: &Key, nonce: &[u8]) -> Result<(), Error> {
+pub fn chacha20_xor(to_xor: &mut[u8], state_byte_offset: u64, key: &Key, nonce: &[u8]) -> Result<(), Error<CpError>> {
 	if unsafe{ sodium_init() } == -1 { panic!("Failed to init libsodium") }
 	
 	// Validate input
-	if key.len() != 32 { throw_err!(ErrorType::InvalidParameter, format!("The key-length is invalid ({} bytes instead of 32)", key.len())) }
-	if nonce.len() != 8 { throw_err!(ErrorType::InvalidParameter, format!("The nonce-length is invalid ({} bytes instead of 8)", nonce.len())) }
+	if key.len() != 32 { throw_err!(CpError::InvalidParameter, format!("The key-length is invalid ({} bytes instead of 32)", key.len())) }
+	if nonce.len() != 8 { throw_err!(CpError::InvalidParameter, format!("The nonce-length is invalid ({} bytes instead of 8)", nonce.len())) }
 	
 	// Compute the aligned boundaries and initialize position-indicator
 	let (skip_left, mut current_block, mut to_xor_pos) = {
@@ -141,24 +141,24 @@ pub fn chacha20_xor(to_xor: &mut[u8], state_byte_offset: u64, key: &Key, nonce: 
 
 
 
-pub fn poly1305(buffer: &mut[u8], data: &[u8], key: &Key) -> Result<(), Error> {
+pub fn poly1305(buffer: &mut[u8], data: &[u8], key: &Key) -> Result<(), Error<CpError>> {
 	if unsafe{ sodium_init() } == -1 { panic!("Failed to init libsodium") }
 	
 	// Validate input
-	if buffer.len() < 16 { throw_err!(ErrorType::InvalidParameter, format!("The target-buffer is too small ({} bytes instead of 16)", buffer.len())) }
-	if key.len() != 32 { throw_err!(ErrorType::InvalidParameter, format!("The key-length is invalid ({} bytes instead of 32)", buffer.len())) }
+	if buffer.len() < 16 { throw_err!(CpError::InvalidParameter, format!("The target-buffer is too small ({} bytes instead of 16)", buffer.len())) }
+	if key.len() != 32 { throw_err!(CpError::InvalidParameter, format!("The key-length is invalid ({} bytes instead of 32)", buffer.len())) }
 	
 	// Compute MAC
 	unsafe{ crypto_onetimeauth_poly1305(buffer.as_mut_ptr() as *mut c_uchar, data.as_ptr() as *const c_uchar, data.len() as c_ulonglong, key.as_ptr()); }
 	Ok(())
 }
 
-pub fn hmac_sha2_512(buffer: &mut[u8], data: &[u8], key: &Key) -> Result<(), Error> {
+pub fn hmac_sha2_512(buffer: &mut[u8], data: &[u8], key: &Key) -> Result<(), Error<CpError>> {
 	if unsafe{ sodium_init() } == -1 { panic!("Failed to init libsodium") }
 	
 	// Validate input
-	if buffer.len() < 64 { throw_err!(ErrorType::InvalidParameter, format!("The target-buffer is too small ({} bytes instead of 16)", buffer.len())) }
-	if key.len() != 32 { throw_err!(ErrorType::InvalidParameter, format!("The key-length is invalid ({} bytes instead of 32)", buffer.len())) }
+	if buffer.len() < 64 { throw_err!(CpError::InvalidParameter, format!("The target-buffer is too small ({} bytes instead of 16)", buffer.len())) }
+	if key.len() != 32 { throw_err!(CpError::InvalidParameter, format!("The key-length is invalid ({} bytes instead of 32)", buffer.len())) }
 	
 	// Compute HMAC
 	unsafe{ crypto_auth_hmacsha512(buffer.as_mut_ptr() as *mut c_uchar, data.as_ptr() as *const c_uchar, data.len() as c_ulonglong, key.as_slice().as_ptr() as *const c_uchar); }

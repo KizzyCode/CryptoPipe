@@ -4,10 +4,10 @@ Usage: `%PROGRAM_NAME% <verb> [switches]...` where <verb> is one of the followin
             The password to encrypt/decrypt the data; you must either specify a password using this switch or set it
             using the environment-variable "CRYPTO_PIPE_PASSWORD"
 
-        `--pbkdf-time-cost=<integer>` (DEFAULT: 8):
+        `--pbkdf-time-cost=<integer>` (DEFAULT: 12):
             The time-cost (usually computational work) required to derive the key from the password
 
-        `--pbkdf-memory-cost=<integer>` (DEFAULT: 256):
+        `--pbkdf-memory-cost=<integer>` (DEFAULT: 512):
             The amount of memory required to derive the key from the password in MiB
 
         `--pbkdf-parallelism=<integer>` (DEFAULT: 4):

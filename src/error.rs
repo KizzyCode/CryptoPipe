@@ -1,15 +1,16 @@
 use std;
+use super::asn1_der;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 /// The error-type
-pub enum ErrorType {
+pub enum CpError {
 	/// Invalid data (invalid encoding, integrity error etc.)
 	InvalidData,
 	/// Not enough resources to process data
 	ResourceError,
 	
 	/// Other IO-error
-	IOError(std::io::Error),
+	IOError(std::io::ErrorKind, String),
 	
 	/// Invalid parameter (not in range, does not make sense etc.)
 	InvalidParameter,
@@ -19,84 +20,31 @@ pub enum ErrorType {
 	/// CLI-error
 	CliError,
 	
-	/// Another error
 	Other(String)
 }
-impl From<std::io::Error> for ErrorType {
+impl From<std::io::Error> for CpError {
 	fn from(error: std::io::Error) -> Self {
-		ErrorType::IOError(error)
+		use std::error::Error;
+		CpError::IOError(error.kind(), format!("{}", error.description()))
 	}
 }
-impl From<std::str::Utf8Error> for ErrorType {
+impl From<std::io::ErrorKind> for CpError {
+	fn from(kind: std::io::ErrorKind) -> Self {
+		CpError::IOError(kind, format!("{:?}", kind))
+	}
+}
+impl From<std::str::Utf8Error> for CpError {
 	fn from(_: std::str::Utf8Error) -> Self {
-		ErrorType::InvalidData
+		CpError::InvalidData
 	}
 }
-impl From<std::num::ParseIntError> for ErrorType {
+impl From<std::num::ParseIntError> for CpError {
 	fn from(_: std::num::ParseIntError) -> Self {
-		ErrorType::InvalidData
+		CpError::InvalidData
 	}
 }
-impl From<super::asn1_der::Error> for ErrorType {
-	fn from(_: super::asn1_der::Error) -> ErrorType {
-		ErrorType::InvalidData
+impl From<asn1_der::Error> for CpError {
+	fn from(_: asn1_der::Error) -> CpError {
+		CpError::InvalidData
 	}
-}
-impl PartialEq for ErrorType {
-	fn eq(&self, other: &Self) -> bool {
-		let self_string = format!("{:?}", self);
-		let other_string = format!("{:?}", other);
-		self_string == other_string
-	}
-}
-impl Eq for ErrorType {}
-
-
-#[derive(Debug)]
-/// An error-describing structure containing the error and it's file/line
-pub struct Error {
-	/// The error-type
-	pub error_type: ErrorType,
-	/// Description
-	pub description: String,
-	/// The file in which the error occurred
-	pub file: &'static str,
-	/// The line on which the error occurred
-	pub line: u32
-}
-impl Error {
-	pub fn as_string(&self) -> String {
-		if !self.description.is_empty() { self.description.clone() }
-			else { format!("{:?}", self) }
-	}
-}
-
-
-#[macro_export]
-/// Create an error from an `ErrorType`
-macro_rules! new_err {
-	($error_type:expr, $description:expr) => (Err($crate::error::Error {
-		error_type: $error_type,
-		description: $description,
-		file: file!(),
-		line: line!()
-	}));
-	($error_type:expr) => (new_err!($error_type, "".to_owned()));
-}
-
-#[macro_export]
-/// Create an error from an `ErrorType`
-macro_rules! throw_err {
-	($error_type:expr, $description:expr) => (return new_err!($error_type, $description));
-	($error_type:expr) => (throw_err!($error_type, "".to_owned()));
-}
-
-#[macro_export]
-/// Tries an expression and propagates an eventual error
-macro_rules! try_err {
-	($code:expr, $description:expr) => (match $code {
-		Ok(result) => result,
-		Err(error) => throw_err!($crate::error::ErrorType::from(error), $description)
-	});
-	($code:expr) => (try_err!($code, "".to_owned()))
 }

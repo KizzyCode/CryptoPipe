@@ -1,14 +1,18 @@
+#[macro_use] extern crate etrace;
 extern crate asn1_der;
+extern crate cli;
 
-#[macro_use] mod error;
+mod error;
 #[cfg(test)] mod tests;
-mod cli;
 mod crypto;
 mod io;
 mod stream;
 
 use std::env::var;
-use error::{ Error, ErrorType };
+use std::collections::HashMap;
+use error::CpError;
+use etrace::Error;
+
 
 
 /// Prints `message` to stderr and terminates with `code`
@@ -42,101 +46,89 @@ fn die_help() -> ! {
 
 
 /// Parses the CLI-verb and it's switches
-fn parse_cli() -> Result<cli::Verb, Error> {
-	// CLI-parse-helpers
-	fn parse_string(raw: &str) -> Result<String, Error> {
-		Ok(raw.to_string())
-	}
-	fn parse_u32(raw: &str) -> Result<u32, Error> {
-		if let Ok(value) = raw.parse::<u32>() { Ok(value) }
-			else { throw_err!(ErrorType::CliError, format!("Invalid parameter \"{}\" (must be a positive integer)", raw)) }
-	}
-	
-	// CLI-verbs
+fn parse_cli() -> Result<cli::CliResult, Error<CpError>> {
 	let verbs = vec![
-		cli::Verb::new("help", vec![]),
-		cli::Verb::new("licenses", vec![]),
-		cli::Verb::new("seal", vec![
-			Box::new(cli::TypedSwitch::new("--password=", Some(String::new()), &parse_string)),
+		("help", cli::VerbParser::new()),
+		("licenses", cli::VerbParser::new()),
+		("seal", cli::VerbParser::with_switches(vec![
+			("--password=", cli::SwitchParser::with_default(String::new(), &cli::parsers::parse_from_str::<String>)),
 			
-			Box::new(cli::TypedSwitch::new("--pbkdf-time-cost=", Some(8u32), &parse_u32)),
-			Box::new(cli::TypedSwitch::new("--pbkdf-memory-cost=", Some(256u32), &parse_u32)),
-			Box::new(cli::TypedSwitch::new("--pbkdf-parallelism=", Some(4u32), &parse_u32)),
+			("--pbkdf-time-cost=", cli::SwitchParser::with_default(12u32, &cli::parsers::parse_from_str::<u32>)),
+			("--pbkdf-memory-cost=", cli::SwitchParser::with_default(512u32, &cli::parsers::parse_from_str::<u32>)),
+			("--pbkdf-parallelism=", cli::SwitchParser::with_default(4u32, &cli::parsers::parse_from_str::<u32>)),
 			
-			Box::new(cli::TypedSwitch::new("--pbkdf-algo=", Some("Argon2i".to_string()), &parse_string)),
-			Box::new(cli::TypedSwitch::new("--kdf-algo=", Some("HMAC-SHA512".to_string()), &parse_string)),
-			Box::new(cli::TypedSwitch::new("--auth-enc-algo=", Some("ChaChaPoly".to_string()), &parse_string)),
-		]),
-		cli::Verb::new("open", vec![
-			Box::new(cli::TypedSwitch::new("--password=", Some(String::new()), &parse_string))
-		])
+			("--pbkdf-algo=", cli::SwitchParser::with_default("Argon2i".to_string(), &cli::parsers::parse_from_str::<String>)),
+			("--kdf-algo=", cli::SwitchParser::with_default("HMAC-SHA512".to_string(), &cli::parsers::parse_from_str::<String>)),
+			("--auth-enc-algo=", cli::SwitchParser::with_default("ChaChaPoly".to_string(), &cli::parsers::parse_from_str::<String>))
+		])),
+		("open", cli::VerbParser::with_switches(vec![
+			("--password=", cli::SwitchParser::with_default(String::new(), &cli::parsers::parse_from_str::<String>))
+		]))
 	];
-	cli::parse(verbs)
+	Ok(try_err!(cli::parse_verbs(verbs), CpError::CliError, "Failed to parse CLI-arguments"))
 }
 
 /// Get the password either from the "--password="-CLI-switch or from the "CRYPTO_PIPE_PASSWORD"-
 /// environment-variable
-fn get_password(verb: &cli::Verb) -> Result<String, Error> {
-	// Check if CLI-switch is set
-	let password = verb.get_switch::<String>("--password=")?;
+fn get_password(switches: &mut HashMap<String, cli::SwitchParser>) -> Result<String, Error<CpError>> {
+	// Get switch-value
+	let password = try_err!(switches.remove("--password=").unwrap().into_value::<String>(), CpError::CliError, "Failed to parse \"--password=\"");
 	if !password.is_empty() { return Ok(password) }
 	
 	// Try to read environment-var
 	if let Ok(password) = var("CRYPTO_PIPE_PASSWORD") { return Ok(password) }
-	throw_err!(ErrorType::CliError, "You either need to set the \"--password=\"-switch or the \"CRYPTO_PIPE_PASSWORD\"-environment-variable".to_string())
+	throw_err!(CpError::CliError, "You either need to set the \"--password=\"-switch or the \"CRYPTO_PIPE_PASSWORD\"-environment-variable")
 }
 
 /// Reads and executes the verb
-fn run() -> Result<(), Error> {
-	// Read and process verb
-	let verb = parse_cli()?;
+fn run() -> Result<(), Error<CpError>> {
+	// Read and process CLI-input
+	let (verb, mut switches): (String, HashMap<String, cli::SwitchParser>) = try_err!(parse_cli());
 	
-	match verb.name() {
+	match verb.as_str() {
 		"help" => die_help(),
 		"licenses" => die_licenses(),
 		"seal" => {
 			// Read PBKDF-params
-			let pbkdf_params = (
-				verb.get_switch::<u32>("--pbkdf-time-cost=")?,
-				verb.get_switch::<u32>("--pbkdf-memory-cost=")?,
-				verb.get_switch::<u32>("--pbkdf-parallelism=")?
+			let pbkdf_params: (u32, u32, u32) = (
+				*try_err!(switches["--pbkdf-time-cost="].get::<u32>(), CpError::CliError, "Failed to parse \"--pbkdf-time-cost=\""),
+				*try_err!(switches["--pbkdf-memory-cost="].get::<u32>(), CpError::CliError, "Failed to parse \"--pbkdf-memory-cost=\""),
+				*try_err!(switches["--pbkdf-parallelism="].get::<u32>(), CpError::CliError, "Failed to parse \"--pbkdf-parallelism=\"")
 			);
 			
 			// Create stream-instance
 			let stream_instance = {
 				// Create algorithm-instances
-				let pbkdf = match verb.get_switch::<String>("--pbkdf-algo=")?.as_str() {
+				let pbkdf = match try_err!(switches["--pbkdf-algo="].get::<String>(), CpError::CliError, "Failed to parse \"--pbkdf-algo=\"").as_str() {
 					"Argon2i" => crypto::pbkdf::Argon2i::new(pbkdf_params.0, pbkdf_params.1, pbkdf_params.2),
-					algo => throw_err!(ErrorType::CliError, format!("Unsupported PBKDF-algorithm \"{}\"", algo))
+					algo => throw_err!(CpError::CliError, format!("Unsupported PBKDF-algorithm \"{}\"", algo))
 				};
-				let kdf = match verb.get_switch::<String>("--kdf-algo=")?.as_str() {
+				let kdf = match try_err!(switches["--kdf-algo="].get::<String>(), CpError::CliError, "Failed to parse \"--kdf-algo=\"").as_str() {
 					"HMAC-SHA512" => crypto::kdf::HmacSha2512::new(),
-					algo => throw_err!(ErrorType::CliError, format!("Unsupported KDF-algorithm \"{}\"", algo))
+					algo => throw_err!(CpError::CliError, format!("Unsupported KDF-algorithm \"{}\"", algo))
 				};
-				let auth_enc = match verb.get_switch::<String>("--auth-enc-algo=")?.as_str() {
+				let auth_enc = match try_err!(switches["--auth-enc-algo="].get::<String>(), CpError::CliError, "Failed to parse \"--auth-enc-algo=\"").as_str() {
 					"ChaChaPoly" => crypto::auth_enc::ChaCha20Poly1305::new(),
-					algo => throw_err!(ErrorType::CliError, format!("Unsupported authenticated-encryption-algorithm \"{}\"", algo))
+					algo => throw_err!(CpError::CliError, format!("Unsupported authenticated-encryption-algorithm \"{}\"", algo))
 				};
 				crypto::StreamInstance::new(pbkdf, kdf, auth_enc)
 			};
 			
 			// Start runloop
-			stream::Encryptor::new(get_password(&verb)?, &mut io::Stdio::new(), stream_instance)?.runloop()
+			try_err!(stream::Encryptor::new(try_err!(get_password(&mut switches)), &mut io::Stdio::new(), stream_instance)).runloop()
 		},
 		"open" => {
 			// Start runloop
-			stream::Decryptor::new(get_password(&verb)?, &mut io::Stdio::new())?.runloop()
+			try_err!(stream::Decryptor::new(try_err!(get_password(&mut switches)), &mut io::Stdio::new())).runloop()
 		},
-		_ => panic!("Should never happen")
+		_ => unreachable!()
 	}
 }
-
 
 fn main() {
 	// "Catch" all errors to print them readable
 	match run() {
 		Ok(result) => result,
-		Err(error) => if error.error_type == ErrorType::CliError { die_error_help(&error.as_string()) }
-			else { die(&error.as_string(), 2) }
+		Err(error) => die_error_help(&error.to_string())
 	}
 }

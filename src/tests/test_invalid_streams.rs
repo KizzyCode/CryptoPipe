@@ -1,5 +1,5 @@
 use std::io::ErrorKind;
-use super::super::error::ErrorType;
+use super::super::CpError;
 use super::super::crypto;
 use super::super::stream;
 use super::memory_io::MemoryIo;
@@ -11,7 +11,7 @@ const INVALID_STREAM_PASSWORD: &str = "Invalid password";
 struct Test<'a> {
 	random_size: usize,
 	modificator: &'a Fn(&mut Vec<u8>),
-	error_type_description: (ErrorType, String)
+	error_type_description: (CpError, String)
 }
 impl<'a> Test<'a> {
 	pub fn argon2i_hmacsha512_chachapoly(&self, pbkdf_parameters: (u32, u32, u32)) {
@@ -52,7 +52,7 @@ impl<'a> Test<'a> {
 		};
 		
 		// Compare errors
-		assert_eq!(error.error_type, self.error_type_description.0);
+		assert_eq!(error.kind, self.error_type_description.0);
 		assert_eq!(error.description, self.error_type_description.1);
 	}
 }
@@ -64,49 +64,49 @@ fn batch() {
 		Test {
 			random_size: 0,
 			modificator: &|x: &mut Vec<u8>| x.truncate(0),
-			error_type_description: (ErrorType::IOError(ErrorKind::UnexpectedEof.into()), "Failed to read from stdin".to_owned())
+			error_type_description: (CpError::IOError(ErrorKind::UnexpectedEof.into(), "UnexpectedEof".to_string()), "Failed to read from stdin".to_owned())
 		},
 		// Modify data
 		Test {
 			random_size: 7798,
 			modificator: &|x: &mut Vec<u8>| x[714] = 0x40,
-			error_type_description: (ErrorType::InvalidData, "Invalid authentication-tag".to_owned())
+			error_type_description: (CpError::InvalidData, "Invalid authentication-tag".to_owned())
 		},
 		// Truncate MAC
 		Test {
 			random_size: 1 * 1024 * 1024,
 			modificator: &|x: &mut Vec<u8>| { let len = x.len(); x.truncate(len - 1); },
-			error_type_description: (ErrorType::InvalidData, "Invalid authentication-tag".to_owned())
+			error_type_description: (CpError::InvalidData, "Invalid authentication-tag".to_owned())
 		},
 		// Truncate chunk
 		Test {
 			random_size: 2 * 1024 * 1024,
 			modificator: &|x: &mut Vec<u8>| x.truncate(158 + 16),
-			error_type_description: (ErrorType::InvalidData, "Invalid authentication-tag".to_owned())
+			error_type_description: (CpError::InvalidData, "Invalid authentication-tag".to_owned())
 		},
 		// Remove last chunk
 		Test {
 			random_size: 3 * 1024 * 1024,
 			modificator: &|x: &mut Vec<u8>| { let len = x.len(); x.truncate(len - (stream::CHUNK_DATA_SIZE + 16)); },
-			error_type_description: (ErrorType::InvalidData, "Invalid authentication-tag".to_owned())
+			error_type_description: (CpError::InvalidData, "Invalid authentication-tag".to_owned())
 		},
 		// Damage MAC
 		Test {
 			random_size: 7 * 1024 * 1024,
 			modificator: &|x: &mut Vec<u8>| { let len = x.len(); x[len - 1] ^= 0x40 },
-			error_type_description: (ErrorType::InvalidData, "Invalid authentication-tag".to_owned())
+			error_type_description: (CpError::InvalidData, "Invalid authentication-tag".to_owned())
 		},
 		// Remove everything except the stream-header
 		Test {
 			random_size: 8 * 1024 * 1024,
 			modificator: &|x: &mut Vec<u8>| x.truncate(158),
-			error_type_description: (ErrorType::InvalidData, "Invalid authentication-tag".to_owned())
+			error_type_description: (CpError::InvalidData, "Invalid authentication-tag".to_owned())
 		},
 		// Truncate the stream-header
 		Test {
 			random_size: 8396411,
 			modificator: &|x: &mut Vec<u8>| x.truncate(7),
-			error_type_description: (ErrorType::IOError(ErrorKind::UnexpectedEof.into()), "Failed to read from stdin".to_owned())
+			error_type_description: (ErrorKind::UnexpectedEof.into(), "Failed to read from stdin".to_owned())
 		}
 	];
 	

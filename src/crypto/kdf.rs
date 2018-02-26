@@ -1,11 +1,11 @@
-use super::super::{ Error, ErrorType };
+use super::super::{ Error, CpError };
 use super::libsodium;
 use super::super::asn1_der;
 use super::super::asn1_der::FromDer;
 
 pub trait Kdf {
 	/// Derives a key from a base-key
-	fn derive(&self, base_key: &libsodium::Key, info: &[u8]) -> Result<libsodium::Key, Error>;
+	fn derive(&self, base_key: &libsodium::Key, info: &[u8]) -> Result<libsodium::Key, Error<CpError>>;
 	
 	/// Returns a string specifying the algorithm-instance
 	fn algorithm(&self) -> &'static str;
@@ -17,15 +17,15 @@ pub trait Kdf {
 	}
 }
 
-pub fn from_serialized(serialized: asn1_der::DerObject) -> Result<Box<Kdf>, Error> {
+pub fn from_serialized(serialized: asn1_der::DerObject) -> Result<Box<Kdf>, Error<CpError>> {
 	// Try to parse info
-	let info: Vec<asn1_der::DerObject> = try_err!(Vec::<asn1_der::DerObject>::from_der(serialized));
-	if info.len() < 1 { throw_err!(ErrorType::InvalidData) }
+	let info: Vec<asn1_der::DerObject> = try_convert_err!(Vec::<asn1_der::DerObject>::from_der(serialized));
+	if info.len() < 1 { throw_err!(CpError::InvalidData) }
 	
 	// Parse and select algorithm
-	match (try_err!(String::from_der(info[0].clone())) as String).as_str() {
+	match (try_convert_err!(String::from_der(info[0].clone())) as String).as_str() {
 		HMAC_SHA2_512_ID => Ok(HmacSha2512::new()),
-		_ => throw_err!(ErrorType::Unsupported)
+		_ => throw_err!(CpError::Unsupported)
 	}
 }
 
@@ -39,12 +39,12 @@ impl HmacSha2512 {
 	}
 }
 impl Kdf for HmacSha2512 {
-	fn derive(&self, base_key: &libsodium::Key, info: &[u8]) -> Result<libsodium::Key, Error> {
+	fn derive(&self, base_key: &libsodium::Key, info: &[u8]) -> Result<libsodium::Key, Error<CpError>> {
 		let mut derived_key = libsodium::Key::new(64);
 		for byte in derived_key.as_mut_slice().iter_mut() { *byte = 0x00; }
 		
-		libsodium::hmac_sha2_512(derived_key.as_mut_slice(), &info, base_key)?;
-		derived_key.truncate(32)?;
+		try_err!(libsodium::hmac_sha2_512(derived_key.as_mut_slice(), &info, base_key));
+		try_err!(derived_key.truncate(32));
 		Ok(derived_key)
 	}
 	

@@ -5,7 +5,7 @@ pub mod auth_enc;
 
 use super::asn1_der;
 use super::asn1_der::FromDer;
-use super::error::{ Error, ErrorType };
+use super::{ Error, CpError };
 
 pub use self::libsodium::{ Key, random };
 pub use self::pbkdf::Pbkdf;
@@ -29,29 +29,29 @@ impl StreamInstance {
 	/// Returns `Ok(Some(header_length))` if the length was decoded successfully or
 	/// `Ok(None)` if there are not enough bytes to decode the length or
 	/// `Err(error)` on error
-	pub fn try_parse_length(data: &[u8]) -> Result<Option<usize>, Error> {
-		if let Some((length, _)) = try_err!(asn1_der::DerObject::try_decode_length(data)) { Ok(Some(length)) }
+	pub fn try_parse_length(data: &[u8]) -> Result<Option<usize>, Error<CpError>> {
+		if let Some((length, _)) = try_convert_err!(asn1_der::DerObject::try_decode_length(data)) { Ok(Some(length)) }
 			else { Ok(None) }
 	}
 	
 	/// Parses the stream-info from a serialized representation
-	pub fn from_serialized(serialized: Vec<u8>) -> Result<Self, Error> {
+	pub fn from_serialized(serialized: Vec<u8>) -> Result<Self, Error<CpError>> {
 		// DER-decode data
-		let der_object: asn1_der::DerObject = try_err!(asn1_der::DerObject::from_encoded(serialized));
+		let der_object: asn1_der::DerObject = try_convert_err!(asn1_der::DerObject::from_encoded(serialized));
 		
 		// Parse sequence
-		let sequence: Vec<asn1_der::DerObject> = try_err!(Vec::<asn1_der::DerObject>::from_der(der_object));
-		if sequence.len() < 4 { throw_err!(ErrorType::InvalidData) }
+		let sequence: Vec<asn1_der::DerObject> = try_convert_err!(Vec::<asn1_der::DerObject>::from_der(der_object));
+		if sequence.len() < 4 { throw_err!(CpError::InvalidData) }
 		
 		// Validate version
-		let version: String = try_err!(String::from_der(sequence[0].clone()));
-		if !VERSIONS.contains(&version.as_str()) { throw_err!(ErrorType::Unsupported, format!("Unsupported CryptoPipe-stream-version ({})", version)) }
+		let version: String = try_convert_err!(String::from_der(sequence[0].clone()));
+		if !VERSIONS.contains(&version.as_str()) { throw_err!(CpError::Unsupported, format!("Unsupported CryptoPipe-stream-version ({})", version)) }
 		
 		// Load instances
 		Ok(StreamInstance {
-			pbkdf: pbkdf::from_serialized(sequence[1].clone())?,
-			kdf: kdf::from_serialized(sequence[2].clone())?,
-			auth_enc: auth_enc::from_serialized(sequence[3].clone())?
+			pbkdf: try_err!(pbkdf::from_serialized(sequence[1].clone())),
+			kdf: try_err!(kdf::from_serialized(sequence[2].clone())),
+			auth_enc: try_err!(auth_enc::from_serialized(sequence[3].clone()))
 		})
 	}
 	
