@@ -5,7 +5,7 @@ use super::{ Error, CpError };
 
 
 /// A key-object to hold keys with various length. The memory will be initialized with random
-/// data and overwritten with random-data if it is dropped.
+/// data and overwritten with `X`-bytes if it is dropped.
 #[derive(Default, Clone)]
 pub struct Key(Vec<u8>);
 impl Key {
