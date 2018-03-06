@@ -58,13 +58,13 @@ impl Io for Stdio {
 	
 	fn read_exact(&mut self, buffer: &mut[u8]) -> Result<(), Error<CpError>> {
 		use std::io::Read;
-		try_convert_err!(self.stdin.read_exact(buffer), "Failed to read from stdin".to_owned());
+		try_err_from!(self.stdin.read_exact(buffer), "Failed to read from stdin".to_owned());
 		Ok(())
 	}
 	fn write_exact(&mut self, data: &[u8]) -> Result<(), Error<CpError>> {
 		use std::io::Write;
-		try_convert_err!(self.stdout.write_all(data), "Failed to write to stdout".to_owned());
-		try_convert_err!(self.stdout.flush());
+		try_err_from!(self.stdout.write_all(data), "Failed to write to stdout".to_owned());
+		try_err_from!(self.stdout.flush());
 		Ok(())
 	}
 }

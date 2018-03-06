@@ -17,11 +17,11 @@ pub trait Pbkdf {
 
 pub fn from_serialized(serialized: asn1_der::DerObject) -> Result<Box<Pbkdf>, Error<CpError>> {
 	// Try to parse info
-	let info: Vec<asn1_der::DerObject> = try_convert_err!(Vec::<asn1_der::DerObject>::from_der(serialized));
+	let info: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(serialized));
 	if info.len() < 2 { throw_err!(CpError::InvalidData) }
 	
 	// Parse and select algorithm
-	match try_convert_err!(String::from_der(info[0].clone())).as_str() {
+	match try_err_from!(String::from_der(info[0].clone())).as_str() {
 		ARGON2I_ID => Argon2i::from_serialized(info[1].clone()),
 		_ => throw_err!(CpError::Unsupported)
 	}
@@ -55,13 +55,13 @@ impl Argon2i {
 	/// parameters
 	pub fn from_serialized(parameters: asn1_der::DerObject) -> Result<Box<Pbkdf>, Error<CpError>> {
 		// Try to parse parameters
-		let parameters: Vec<asn1_der::DerObject> = try_convert_err!(Vec::<asn1_der::DerObject>::from_der(parameters));
+		let parameters: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(parameters));
 		if parameters.len() < 4 { throw_err!(CpError::InvalidData) }
 		
-		let nonce: Vec<u8> = try_convert_err!(Vec::<u8>::from_der(parameters[0].clone()));
-		let time_cost = try_err!(u64_to_u32(try_convert_err!(u64::from_der(parameters[1].clone()))));
-		let memory_cost_mib = try_err!(u64_to_u32(try_convert_err!(u64::from_der(parameters[2].clone()))));
-		let parallelism = try_err!(u64_to_u32(try_convert_err!(u64::from_der(parameters[3].clone()))));
+		let nonce: Vec<u8> = try_err_from!(Vec::<u8>::from_der(parameters[0].clone()));
+		let time_cost = try_err!(u64_to_u32(try_err_from!(u64::from_der(parameters[1].clone()))));
+		let memory_cost_mib = try_err!(u64_to_u32(try_err_from!(u64::from_der(parameters[2].clone()))));
+		let parallelism = try_err!(u64_to_u32(try_err_from!(u64::from_der(parameters[3].clone()))));
 		
 		Ok(Argon2i::with_nonce(nonce, time_cost, memory_cost_mib, parallelism))
 	}

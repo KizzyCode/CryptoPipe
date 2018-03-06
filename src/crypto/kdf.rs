@@ -19,11 +19,11 @@ pub trait Kdf {
 
 pub fn from_serialized(serialized: asn1_der::DerObject) -> Result<Box<Kdf>, Error<CpError>> {
 	// Try to parse info
-	let info: Vec<asn1_der::DerObject> = try_convert_err!(Vec::<asn1_der::DerObject>::from_der(serialized));
+	let info: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(serialized));
 	if info.len() < 1 { throw_err!(CpError::InvalidData) }
 	
 	// Parse and select algorithm
-	match (try_convert_err!(String::from_der(info[0].clone())) as String).as_str() {
+	match (try_err_from!(String::from_der(info[0].clone())) as String).as_str() {
 		HMAC_SHA2_512_ID => Ok(HmacSha2512::new()),
 		_ => throw_err!(CpError::Unsupported)
 	}
