@@ -30,7 +30,7 @@ Features:
  
  5. [Appendix A](#appendix-a)
      1. [PBKDFs](#pbkdfs)
-         1. [Argon2i v1,3](#argon2i-v1.3)
+         1. [Argon2i v1.3](#argon2i-v1.3)
      
      2. [KDFs](#kdfs)
          1. [HMAC-SHA2-512](#hmac-sha2-512)
@@ -157,10 +157,7 @@ These KDFs are currently specified:
 
 ### HMAC-SHA2-512
  - algorithm: `HMAC-SHA2-512`
- - parameters:
-   ```c++
-   NULL; // (=> ASN.1-DER-NULL)
-   ```
+ - parameters: None (no further ASN.1 fields in sequence)
 
 
 ## AuthEncs
@@ -177,7 +174,4 @@ __Note: In this case, a zero-byte-nonce is not a security-issue because each key
 key-nonce-collisions cannot happen__
 
  - algorithm: `ChaCha20+Poly1305@de.KizzyCode.CryptoPipe.v1`
- - parameters:
-   ```c++
-   NULL; // (=> ASN.1-DER-NULL)
-   ```
+ - parameters: None (no further ASN.1 fields in sequence)
