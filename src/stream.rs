@@ -1,6 +1,7 @@
 use super::{ Error, CpError };
 use super::crypto;
 use super::io;
+use super::asn1_der::IntoDerEncoded;
 
 
 pub const CHUNK_DATA_SIZE: usize = (1 * 1024 * 1024);
@@ -34,7 +35,7 @@ impl<'a> Encryptor<'a> {
 	
 	pub fn runloop(&mut self) -> Result<(), Error<CpError>> {
 		// Serialize stream-instance and write it as header
-		try_err!(self.io.write_exact(&self.stream_instance.as_serialized().into_encoded()));
+		try_err!(self.io.write_exact(&self.stream_instance.as_serialized().into_der_encoded()));
 		
 		// Initialize KDF-counter and -buffer and chunk-buffer
 		let mut counter = 0u64;

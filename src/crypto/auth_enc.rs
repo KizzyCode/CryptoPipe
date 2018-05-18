@@ -1,6 +1,6 @@
 use super::{ Error, CpError };
 use super::super::asn1_der;
-use super::super::asn1_der::FromDer;
+use super::super::asn1_der::{ FromDerObject, IntoDerObject };
 use super::libsodium;
 
 pub trait AuthEnc {
@@ -19,18 +19,18 @@ pub trait AuthEnc {
 	
 	/// Serializes the algorithm-instance
 	fn serialize(&self) -> asn1_der::DerObject {
-		let sequence: Vec<asn1_der::DerObject> = vec![self.algorithm().to_string().into()];
-		sequence.into()
+		let sequence: Vec<asn1_der::DerObject> = vec![self.algorithm().to_string().into_der_object()];
+		sequence.into_der_object()
 	}
 }
 
 pub fn from_serialized(serialized: asn1_der::DerObject) -> Result<Box<AuthEnc>, Error<CpError>> {
 	// Try to parse info
-	let info: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(serialized));
+	let info: Vec<asn1_der::DerObject> = try_err!(Vec::<asn1_der::DerObject>::from_der_object(serialized), CpError::InvalidData);
 	if info.len() < 1 { throw_err!(CpError::InvalidData) }
 	
 	// Parse and select algorithm
-	match (try_err_from!(String::from_der(info[0].clone())) as String).as_str() {
+	match (try_err!(String::from_der_object(info[0].clone()), CpError::InvalidData) as String).as_str() {
 		CHACHA20_POLY1305_ID => Ok(ChaCha20Poly1305::new()),
 		_ => throw_err!(CpError::Unsupported)
 	}

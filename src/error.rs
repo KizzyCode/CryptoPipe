@@ -1,5 +1,4 @@
 use std;
-use super::asn1_der;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// The error-type
@@ -40,11 +39,6 @@ impl From<std::str::Utf8Error> for CpError {
 }
 impl From<std::num::ParseIntError> for CpError {
 	fn from(_: std::num::ParseIntError) -> Self {
-		CpError::InvalidData
-	}
-}
-impl From<asn1_der::Error> for CpError {
-	fn from(_: asn1_der::Error) -> CpError {
 		CpError::InvalidData
 	}
 }

@@ -1,10 +1,10 @@
 [package]
 name = "crypto_pipe"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["KizzyCode Software Labs./Keziah Biermann"]
 build = "build.rs"
 
 [dependencies]
-asn1_der = { git = "https://github.com/KizzyCode/asn1_der" }
-etrace = { git = "https://github.com/KizzyCode/etrace" }
+asn1_der = "0.5.2"
+etrace = "0.2.7"
 cli = { git = "https://github.com/KizzyCode/cli" }

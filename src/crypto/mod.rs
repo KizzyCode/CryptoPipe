@@ -4,7 +4,7 @@ pub mod kdf;
 pub mod auth_enc;
 
 use super::asn1_der;
-use super::asn1_der::FromDer;
+use super::asn1_der::{ FromDerEncoded, FromDerObject, IntoDerObject };
 use super::{ Error, CpError };
 
 pub use self::libsodium::{ Key, random };
@@ -30,21 +30,21 @@ impl StreamInstance {
 	/// `Ok(None)` if there are not enough bytes to decode the length or
 	/// `Err(error)` on error
 	pub fn try_parse_length(data: &[u8]) -> Result<Option<usize>, Error<CpError>> {
-		if let Some((length, _)) = try_err_from!(asn1_der::DerObject::try_decode_length(data)) { Ok(Some(length)) }
+		if let Some((length, _)) = try_err!(asn1_der::der::try_decode_length(data), CpError::InvalidData) { Ok(Some(length)) }
 			else { Ok(None) }
 	}
 	
 	/// Parses the stream-info from a serialized representation
 	pub fn from_serialized(serialized: Vec<u8>) -> Result<Self, Error<CpError>> {
 		// DER-decode data
-		let der_object: asn1_der::DerObject = try_err_from!(asn1_der::DerObject::from_encoded(serialized));
+		let der_object: asn1_der::DerObject = try_err!(asn1_der::DerObject::from_der_encoded(serialized), CpError::InvalidData);
 		
 		// Parse sequence
-		let sequence: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(der_object));
+		let sequence: Vec<asn1_der::DerObject> = try_err!(Vec::<asn1_der::DerObject>::from_der_object(der_object), CpError::InvalidData);
 		if sequence.len() < 4 { throw_err!(CpError::InvalidData) }
 		
 		// Validate version
-		let version: String = try_err_from!(String::from_der(sequence[0].clone()));
+		let version: String = try_err!(String::from_der_object(sequence[0].clone()), CpError::InvalidData);
 		if !VERSIONS.contains(&version.as_str()) { throw_err!(CpError::Unsupported, format!("Unsupported CryptoPipe-stream-version ({})", version)) }
 		
 		// Load instances
@@ -58,11 +58,11 @@ impl StreamInstance {
 	/// Serializes this stream-info
 	pub fn as_serialized(&self) -> asn1_der::DerObject {
 		let sequence: Vec<asn1_der::DerObject> = vec![
-			VERSIONS[0].to_string().into(),
+			VERSIONS[0].to_string().into_der_object(),
 			self.pbkdf.serialize(),
 			self.kdf.serialize(),
 			self.auth_enc.serialize()
 		];
-		sequence.into()
+		sequence.into_der_object()
 	}
 }

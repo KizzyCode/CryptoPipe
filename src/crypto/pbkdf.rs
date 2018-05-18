@@ -2,7 +2,7 @@ use std;
 use super::super::{ Error, CpError };
 use super::libsodium;
 use super::super::asn1_der;
-use super::super::asn1_der::FromDer;
+use super::super::asn1_der::{ FromDerObject, IntoDerObject };
 
 pub trait Pbkdf {
 	/// Derives a key from the provided password and erases the password afterwards
@@ -17,11 +17,11 @@ pub trait Pbkdf {
 
 pub fn from_serialized(serialized: asn1_der::DerObject) -> Result<Box<Pbkdf>, Error<CpError>> {
 	// Try to parse info
-	let info: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(serialized));
+	let info: Vec<asn1_der::DerObject> = try_err!(Vec::<asn1_der::DerObject>::from_der_object(serialized), CpError::InvalidData);
 	if info.len() < 2 { throw_err!(CpError::InvalidData) }
 	
 	// Parse and select algorithm
-	match try_err_from!(String::from_der(info[0].clone())).as_str() {
+	match try_err!(String::from_der_object(info[0].clone()), CpError::InvalidData).as_str() {
 		ARGON2I_ID => Argon2i::from_serialized(info[1].clone()),
 		_ => throw_err!(CpError::Unsupported)
 	}
@@ -55,13 +55,13 @@ impl Argon2i {
 	/// parameters
 	pub fn from_serialized(parameters: asn1_der::DerObject) -> Result<Box<Pbkdf>, Error<CpError>> {
 		// Try to parse parameters
-		let parameters: Vec<asn1_der::DerObject> = try_err_from!(Vec::<asn1_der::DerObject>::from_der(parameters));
+		let parameters: Vec<asn1_der::DerObject> = try_err!(Vec::<asn1_der::DerObject>::from_der_object(parameters), CpError::InvalidData);
 		if parameters.len() < 4 { throw_err!(CpError::InvalidData) }
 		
-		let nonce: Vec<u8> = try_err_from!(Vec::<u8>::from_der(parameters[0].clone()));
-		let time_cost = try_err!(u64_to_u32(try_err_from!(u64::from_der(parameters[1].clone()))));
-		let memory_cost_mib = try_err!(u64_to_u32(try_err_from!(u64::from_der(parameters[2].clone()))));
-		let parallelism = try_err!(u64_to_u32(try_err_from!(u64::from_der(parameters[3].clone()))));
+		let nonce: Vec<u8> = try_err!(Vec::<u8>::from_der_object(parameters[0].clone()), CpError::InvalidData);
+		let time_cost = try_err!(u64_to_u32(try_err!(u64::from_der_object(parameters[1].clone()), CpError::InvalidData)));
+		let memory_cost_mib = try_err!(u64_to_u32(try_err!(u64::from_der_object(parameters[2].clone()), CpError::InvalidData)));
+		let parallelism = try_err!(u64_to_u32(try_err!(u64::from_der_object(parameters[3].clone()), CpError::InvalidData)));
 		
 		Ok(Argon2i::with_nonce(nonce, time_cost, memory_cost_mib, parallelism))
 	}
@@ -86,18 +86,18 @@ impl Pbkdf for Argon2i {
 	fn serialize(&self) -> asn1_der::DerObject {
 		// Serialize parameters
 		let parameters: Vec<asn1_der::DerObject> = vec![
-			self.nonce.clone().into(),
-			(self.time_cost as u64).into(),
-			(self.memory_cost_mib as u64).into(),
-			(self.parallelism as u64).into()
+			self.nonce.clone().into_der_object(),
+			(self.time_cost as u64).into_der_object(),
+			(self.memory_cost_mib as u64).into_der_object(),
+			(self.parallelism as u64).into_der_object()
 		];
 		
 		// Create ASN.1-DER-Sequence
 		let sequence: Vec<asn1_der::DerObject> = vec![
-			self.algorithm().to_string().into(),
-			parameters.into()
+			self.algorithm().to_string().into_der_object(),
+			parameters.into_der_object()
 		];
-		sequence.into()
+		sequence.into_der_object()
 	}
 }
 
