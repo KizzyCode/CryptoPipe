@@ -65,7 +65,7 @@ fn parse_cli() -> Result<cli::CliResult, Error<CpError>> {
 			("--password=", cli::SwitchParser::with_default(String::new(), &cli::parsers::parse_from_str::<String>))
 		]))
 	];
-	Ok(try_err!(cli::parse_verbs(verbs), CpError::CliError, "Failed to parse CLI-arguments"))
+	Ok(try_err_from!(cli::parse_verbs(verbs), "Failed to parse CLI-arguments"))
 }
 
 /// Get the password either from the "--password="-CLI-switch or from the "CRYPTO_PIPE_PASSWORD"-

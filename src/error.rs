@@ -1,3 +1,4 @@
+use super::{ etrace, cli };
 use std;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -25,6 +26,11 @@ impl From<std::io::Error> for CpError {
 	fn from(error: std::io::Error) -> Self {
 		use std::error::Error;
 		CpError::IOError(error.kind(), format!("{}", error.description()))
+	}
+}
+impl From<etrace::Error<cli::CliError>> for CpError {
+	fn from(_: etrace::Error<cli::CliError>) -> Self {
+		CpError::CliError
 	}
 }
 impl From<std::io::ErrorKind> for CpError {
